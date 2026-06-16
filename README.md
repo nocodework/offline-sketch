@@ -82,6 +82,9 @@ offline-sketch is one of a small family of single-file, offline-first tools by N
 - [**offline-notes**](https://github.com/nocodework/offline-notes) — a Markdown editor that renders as you type ([demo](https://nocodework.github.io/offline-notes/))
 - **offline-sketch** — you're here
 
+<a href="https://nocodework.github.io/offline-whiteboard/"><img width="49%" src="https://raw.githubusercontent.com/nocodework/offline-whiteboard/main/screenshot.png" alt="offline-whiteboard"></a>
+<a href="https://nocodework.github.io/offline-notes/"><img width="49%" src="https://raw.githubusercontent.com/nocodework/offline-notes/main/screenshot.png" alt="offline-notes"></a>
+
 ## Contributing
 
 Issues and pull requests are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). It's one file with no toolchain, so there's nothing to set up first.
