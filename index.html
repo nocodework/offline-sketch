@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>offline-sketch — a private, offline sketchpad in a single HTML file</title>
 <meta name="description" content="A private, offline sketchpad in one HTML file. Draw with a pressure-sensitive pen (Apple Pencil, Wacom, iPad). No account, no server, no tracking — your drawings never leave your browser. Free & open source.">
 <meta name="color-scheme" content="light">
@@ -64,7 +64,7 @@
   .tool svg { width: 21px; height: 21px; }
   .tool:hover { background: var(--bg); }
   .tool.active { background: var(--primary-soft); color: var(--primary); }
-  .tool .kbd { position: absolute; bottom: 2px; right: 4px; font-size: 9px; font-weight: 600; color: var(--faint); }
+  .tool .kbd { position: absolute; bottom: 2px; right: 4px; font-size: 10px; font-weight: 600; color: var(--muted); }
   .tool.active .kbd { color: var(--primary); }
   .dock .divider { width: 26px; height: 1px; background: var(--border); margin: 2px 0; }
 
@@ -99,6 +99,12 @@
   #flash { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 9px; font-size: 13px; z-index: 50; box-shadow: var(--shadow-md); opacity: 0; transition: opacity .15s; pointer-events: none; }
 
   @media (max-width: 720px) { .brand .sub { display: none; } .actions .label { display: none; } }
+  @media (hover: none) and (pointer: coarse) {
+    .tool { width: 46px; height: 46px; }
+    .btn { min-height: 40px; } .btn.icon { min-width: 40px; min-height: 40px; }
+    .help-fab { width: 42px; height: 42px; }
+    .swatch { width: 26px; height: 26px; }
+  }
 </style>
 </head>
 <body>
@@ -123,15 +129,15 @@
     </div>
   </div>
 
-  <div class="dock panel" role="toolbar" aria-label="Tools">
+  <div class="dock panel" aria-label="Tools">
     <button class="tool" id="toolPen" data-tool="pen" title="Pen (P)" aria-label="Pen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg><span class="kbd">P</span></button>
     <button class="tool" id="toolEraser" data-tool="eraser" title="Eraser (E)" aria-label="Eraser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4L13 4.9a2 2 0 0 1 2.8 0l4.3 4.3a2 2 0 0 1 0 2.8L13 19"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg><span class="kbd">E</span></button>
-    <button class="tool" id="toolSize" title="Brush size (S)" aria-label="Brush size"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="17" r="2.5"/><circle cx="17" cy="9" r="5"/></svg><span class="kbd">S</span></button>
+    <button class="tool" id="toolSize" title="Brush size (S)" aria-label="Brush size" aria-haspopup="dialog" aria-controls="sizePop" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="17" r="2.5"/><circle cx="17" cy="9" r="5"/></svg><span class="kbd">S</span></button>
     <div class="divider"></div>
     <div class="swatches" id="swatches"></div>
   </div>
 
-  <div class="size-pop panel" id="sizePop" hidden>
+  <div class="size-pop panel" id="sizePop" role="dialog" aria-label="Brush size" hidden>
     <label for="sizeRange">Brush size — <span id="sizeVal">6</span> px</label>
     <input type="range" id="sizeRange" min="1" max="48" value="6">
     <div class="size-preview"><span class="size-dot" id="sizeDot"></span></div>
@@ -139,7 +145,7 @@
 
   <div class="statusbar panel">
     <span class="dot" id="statusDot"></span>
-    <span id="statusText">Pen · 6 px</span>
+    <span id="statusText" aria-live="polite">Pen · 6 px</span>
   </div>
 
   <button class="help-fab" id="helpFab" title="Help & shortcuts" aria-label="Help" aria-haspopup="dialog" aria-controls="helpPanel" aria-expanded="false">?</button>
@@ -154,7 +160,7 @@
     <div class="foot">Your drawing is saved in this browser. Tip: use Export now and then to keep a copy you own.<br><br>Built by <a href="https://nocodework.io" target="_blank" rel="noopener">NoCodeWork</a>, automation and AI apps.<br>Sibling tools: <a href="https://nocodework.github.io/offline-whiteboard/" target="_blank" rel="noopener">offline-whiteboard</a>, <a href="https://nocodework.github.io/offline-notes/" target="_blank" rel="noopener">offline-notes</a>.</div>
   </div>
 
-  <div id="flash"></div>
+  <div id="flash" role="status" aria-live="polite"></div>
   <input type="file" id="importFile" accept="application/json,.json" hidden>
 
 <script>
@@ -173,6 +179,7 @@
   const COLORS = ['#18181B', '#EF4444', '#F97316', '#EAB308', '#22C55E', '#3B82F6', '#7C3AED', '#EC4899'];
   let state = { strokes: [], tool: 'pen', color: '#18181B', size: 6 };
   let redoStack = [];
+  let clearedBackup = null;
   let dpr = Math.max(1, window.devicePixelRatio || 1);
   let drawing = null;     // current stroke being drawn
   let saveTimer = null;
@@ -207,9 +214,21 @@
     ctx.globalCompositeOperation = 'source-over';
   }
   function drawStroke(s) {
-    const pts = s.pts;
-    if (pts.length === 1) { stampSegment(pts[0], pts[0], s.color, s.size, s.tool === 'eraser'); return; }
-    for (let i = 1; i < pts.length; i++) stampSegment(pts[i - 1], pts[i], s.color, s.size, s.tool === 'eraser');
+    const pts = s.pts, erase = s.tool === 'eraser';
+    const constant = pts.every(p => p[2] === pts[0][2]);
+    if (constant && pts.length > 1) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
+      ctx.strokeStyle = erase ? '#000' : s.color;
+      ctx.lineWidth = Math.max(0.6, 2 * radiusFor(s.size, pts[0][2]));
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.stroke(); ctx.globalCompositeOperation = 'source-over';
+      return;
+    }
+    if (pts.length === 1) { stampSegment(pts[0], pts[0], s.color, s.size, erase); return; }
+    for (let i = 1; i < pts.length; i++) stampSegment(pts[i - 1], pts[i], s.color, s.size, erase);
   }
   function redrawAll() { clearCanvas(); for (const s of state.strokes) drawStroke(s); }
 
@@ -217,9 +236,7 @@
   let activeId = null;
   function pt(e) {
     const r = canvas.getBoundingClientRect();
-    let p = e.pressure;
-    if (!p || e.pointerType === 'mouse' || e.pointerType === 'touch') p = (e.buttons || e.pressure) ? 0.5 : 0.5;
-    if (e.pointerType === 'pen') p = e.pressure > 0 ? e.pressure : 0.5;
+    const p = e.pointerType === 'pen' ? (e.pressure > 0 ? e.pressure : 0.5) : 0.5;
     return [+(e.clientX - r.left).toFixed(1), +(e.clientY - r.top).toFixed(1), +Math.max(0.05, Math.min(1, p)).toFixed(3)];
   }
   canvas.addEventListener('pointerdown', (e) => {
@@ -245,11 +262,12 @@
     if (e.pointerId !== activeId) return;
     try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
     activeId = null;
-    if (drawing && drawing.pts.length) { state.strokes.push(drawing); redoStack = []; updateUndo(); scheduleSave(); }
+    if (drawing && drawing.pts.length) { state.strokes.push(drawing); redoStack = []; clearedBackup = null; updateUndo(); scheduleSave(); }
     drawing = null;
   }
   canvas.addEventListener('pointerup', endStroke);
   canvas.addEventListener('pointercancel', endStroke);
+  canvas.addEventListener('lostpointercapture', (e) => { if (e.pointerId === activeId) endStroke(e); });
 
   // ---------- tools / ui ----------
   function setTool(t) {
@@ -275,7 +293,7 @@
   function markSwatch() { document.querySelectorAll('.swatch').forEach(s => s.classList.toggle('sel', s.dataset.c === state.color)); }
 
   const sizePop = document.getElementById('sizePop'), sizeRange = document.getElementById('sizeRange'), sizeVal = document.getElementById('sizeVal'), sizeDot = document.getElementById('sizeDot');
-  document.getElementById('toolSize').onclick = (e) => { e.stopPropagation(); sizePop.hidden = !sizePop.hidden; };
+  document.getElementById('toolSize').onclick = (e) => { e.stopPropagation(); sizePop.hidden = !sizePop.hidden; document.getElementById('toolSize').setAttribute('aria-expanded', String(!sizePop.hidden)); };
   document.addEventListener('pointerdown', (e) => { if (!sizePop.hidden && !sizePop.contains(e.target) && e.target.id !== 'toolSize' && !e.target.closest('#toolSize')) sizePop.hidden = true; });
   function setSize(n) {
     state.size = Math.max(1, Math.min(48, Math.round(n)));
@@ -296,25 +314,28 @@
 
   // ---------- undo / redo / clear ----------
   function updateUndo() {
-    document.getElementById('btnUndo').disabled = state.strokes.length === 0;
+    document.getElementById('btnUndo').disabled = state.strokes.length === 0 && !clearedBackup;
     document.getElementById('btnRedo').disabled = redoStack.length === 0;
   }
-  function undo() { if (!state.strokes.length) return; redoStack.push(state.strokes.pop()); redrawAll(); updateUndo(); scheduleSave(); }
+  function undo() {
+    if (clearedBackup && !state.strokes.length) { state.strokes = clearedBackup; clearedBackup = null; redrawAll(); updateUndo(); scheduleSave(); return; }
+    if (!state.strokes.length) return;
+    redoStack.push(state.strokes.pop()); redrawAll(); updateUndo(); scheduleSave();
+  }
   function redo() { if (!redoStack.length) return; state.strokes.push(redoStack.pop()); redrawAll(); updateUndo(); scheduleSave(); }
   document.getElementById('btnUndo').onclick = undo;
   document.getElementById('btnRedo').onclick = redo;
   document.getElementById('btnClear').onclick = () => {
     if (!state.strokes.length) return;
-    if (confirm('Clear the whole canvas? This can\'t be undone with a button.')) { state.strokes = []; redoStack = []; redrawAll(); updateUndo(); scheduleSave(); }
+    if (confirm('Clear the whole canvas?')) { clearedBackup = state.strokes.filter(x => !x._welcome); state.strokes = []; redoStack = []; redrawAll(); updateUndo(); scheduleSave(); flash('Cleared — press Undo (⌘Z) to bring it back'); }
   };
 
   // ---------- export / import ----------
   function bbox() {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const s of state.strokes) for (const p of s.pts) {
-      const r = s.size / 2 + 2;
-      minX = Math.min(minX, p[0] - r); minY = Math.min(minY, p[1] - r);
-      maxX = Math.max(maxX, p[0] + r); maxY = Math.max(maxY, p[1] + r);
+    for (const s of state.strokes) {
+      if (s.tool === 'eraser' || s._welcome) continue;
+      for (const p of s.pts) { const r = s.size / 2 + 2; minX = Math.min(minX, p[0] - r); minY = Math.min(minY, p[1] - r); maxX = Math.max(maxX, p[0] + r); maxY = Math.max(maxY, p[1] + r); }
     }
     if (!Number.isFinite(minX)) return null;
     return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
@@ -329,16 +350,21 @@
   function exportPNG() {
     const bb = bbox();
     if (!bb) { flash('Nothing to export yet'); return; }
-    const pad = 24, scale = 2;
+    const pad = 24, MAXDIM = 8192;
+    let scale = 2;
+    const maxNeeded = Math.max(bb.w + pad * 2, bb.h + pad * 2);
+    if (maxNeeded * scale > MAXDIM) scale = Math.max(0.5, MAXDIM / maxNeeded);
     const w = Math.ceil((bb.w + pad * 2) * scale), h = Math.ceil((bb.h + pad * 2) * scale);
     const off = document.createElement('canvas'); off.width = w; off.height = h;
     const oc = off.getContext('2d');
-    oc.fillStyle = '#FFFFFF'; oc.fillRect(0, 0, w, h);
     oc.setTransform(scale, 0, 0, scale, (-bb.x + pad) * scale, (-bb.y + pad) * scale);
-    const realCtx = ctx, realDpr = dpr;
-    // re-stamp strokes onto the offscreen context
-    for (const s of state.strokes) stampOn(oc, s);
-    off.toBlob((blob) => { if (!blob) { flash('Could not generate PNG'); return; } download(blob, 'sketch.png'); }, 'image/png');
+    for (const s of state.strokes) { if (s._welcome) continue; stampOn(oc, s); }
+    // white paper behind the ink, so erased areas read white instead of transparent
+    oc.setTransform(1, 0, 0, 1, 0, 0);
+    oc.globalCompositeOperation = 'destination-over';
+    oc.fillStyle = '#FFFFFF'; oc.fillRect(0, 0, w, h);
+    oc.globalCompositeOperation = 'source-over';
+    off.toBlob((blob) => { if (!blob) { flash('Could not generate PNG (drawing too large)'); return; } download(blob, 'sketch.png'); }, 'image/png');
   }
   function stampOn(c, s) {
     const pts = s.pts, erase = s.tool === 'eraser';
@@ -365,7 +391,13 @@
     if (!f) return;
     if (f.size > 8 * 1024 * 1024) { flash('File too large'); return; }
     const r = new FileReader();
-    r.onload = () => { try { const d = JSON.parse(r.result); state.strokes = sanitizeStrokes(d.strokes); redoStack = []; redrawAll(); updateUndo(); scheduleSave(); flash('Imported ' + f.name); } catch (err) { flash('Could not load file: ' + err.message); } };
+    r.onload = () => {
+      let d; try { d = JSON.parse(r.result); } catch (err) { flash('Could not load file: ' + err.message); return; }
+      const next = sanitizeStrokes(d && d.strokes);
+      if (!next.length) { flash('No drawing found in that file'); return; }
+      if (state.strokes.some(x => !x._welcome) && !confirm('Importing will replace the current drawing. Continue?')) return;
+      state.strokes = next; redoStack = []; clearedBackup = null; redrawAll(); updateUndo(); scheduleSave(); flash('Imported ' + f.name);
+    };
     r.onerror = () => flash('Could not read file');
     r.readAsText(f);
   };
@@ -382,19 +414,32 @@
     })).filter(s => s.pts.length);
   }
   function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); }
+  let saveFailed = false;
   function save() {
-    try { localStorage.setItem(STORE, JSON.stringify({ strokes: state.strokes, tool: state.tool, color: state.color, size: state.size })); }
-    catch (e) { flash('Could not save (storage full?)'); }
+    try {
+      const strokes = state.strokes.filter(s => !s._welcome);
+      localStorage.setItem(STORE, JSON.stringify({ strokes, tool: state.tool, color: state.color, size: state.size }));
+      if (saveFailed) { saveFailed = false; saveBanner(false); }
+    } catch (e) { if (!saveFailed) { saveFailed = true; saveBanner(true); } }
+  }
+  function saveBanner(show) {
+    let el = document.getElementById('saveErr');
+    if (show) { if (!el) { el = document.createElement('div'); el.id = 'saveErr'; el.style.cssText = 'position:fixed;left:50%;top:10px;transform:translateX(-50%);background:#ef4444;color:#fff;padding:7px 14px;border-radius:9px;font-size:13px;z-index:60;box-shadow:var(--shadow-md)'; el.textContent = 'Could not save — storage is full. Export your drawing to keep it.'; document.body.appendChild(el); } }
+    else if (el) { el.remove(); }
   }
   function load() {
+    const raw = localStorage.getItem(STORE);
+    if (!raw) return false;
     try {
-      const d = JSON.parse(localStorage.getItem(STORE) || 'null');
-      if (!d) return;
-      state.strokes = sanitizeStrokes(d.strokes);
-      if (d.tool === 'pen' || d.tool === 'eraser') state.tool = d.tool;
-      if (typeof d.color === 'string') state.color = d.color;
-      if (Number.isFinite(+d.size)) state.size = Math.max(1, Math.min(48, +d.size));
-    } catch (e) {}
+      const d = JSON.parse(raw);
+      if (d) {
+        state.strokes = sanitizeStrokes(d.strokes);
+        if (d.tool === 'pen' || d.tool === 'eraser') state.tool = d.tool;
+        if (typeof d.color === 'string') state.color = d.color;
+        if (Number.isFinite(+d.size)) state.size = Math.max(1, Math.min(48, +d.size));
+      }
+    } catch (e) { flash('Saved drawing was corrupt; starting fresh'); }
+    return true;
   }
 
   let flashTimer = null;
@@ -402,7 +447,8 @@
 
   // ---------- keyboard ----------
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !helpPanel.hidden) { helpPanel.hidden = true; helpFab.setAttribute('aria-expanded', 'false'); return; }
+    if (e.key === 'Escape' && !sizePop.hidden) { sizePop.hidden = true; document.getElementById('toolSize').setAttribute('aria-expanded', 'false'); return; }
+    if (e.key === 'Escape' && !helpPanel.hidden) { helpPanel.hidden = true; helpFab.setAttribute('aria-expanded', 'false'); helpFab.focus(); return; }
     const meta = e.metaKey || e.ctrlKey;
     if (meta && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if (meta && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
@@ -418,22 +464,23 @@
   helpFab.onclick = () => { helpPanel.hidden = !helpPanel.hidden; helpFab.setAttribute('aria-expanded', String(!helpPanel.hidden)); if (!helpPanel.hidden) helpPanel.focus(); };
   document.addEventListener('pointerdown', (e) => { if (!helpPanel.hidden && !helpPanel.contains(e.target) && e.target !== helpFab) { helpPanel.hidden = true; helpFab.setAttribute('aria-expanded', 'false'); } });
 
-  window.addEventListener('resize', resize);
+  let resizeRAF = null;
+  window.addEventListener('resize', () => { if (resizeRAF) cancelAnimationFrame(resizeRAF); resizeRAF = requestAnimationFrame(resize); });
   window.addEventListener('beforeunload', save);
 
   // ---------- init ----------
-  load();
+  const hadSaved = load();
   setTool(state.tool);
   markSwatch();
   setSize(state.size);
   updateUndo();
   resize();
 
-  if (!state.strokes.length) {
-    // tiny welcome scribble so the canvas isn't blank on first open
+  if (!hadSaved && !state.strokes.length) {
+    // tiny welcome scribble on genuine first open (not persisted, not exported)
     const c = window.innerWidth / 2, m = window.innerHeight / 2;
     const wave = []; for (let i = 0; i <= 60; i++) { const x = c - 130 + i * 4.3; const y = m + Math.sin(i / 5) * 26; wave.push([+x.toFixed(1), +y.toFixed(1), +(0.35 + 0.3 * (1 + Math.sin(i / 7))).toFixed(3)]); }
-    state.strokes.push({ tool: 'pen', color: '#7C3AED', size: 8, pts: wave });
+    state.strokes.push({ tool: 'pen', color: '#7C3AED', size: 8, pts: wave, _welcome: true });
     redrawAll(); updateUndo();
   }
 })();
