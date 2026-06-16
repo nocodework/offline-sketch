@@ -44,8 +44,8 @@
   .brand { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 10px; text-decoration: none; color: inherit; }
   .brand .logo { width: 32px; height: 32px; flex: none; border-radius: 8px; background: linear-gradient(180deg,#8B5CF6,#6D28D9); display: grid; place-items: center; box-shadow: var(--shadow-sm); }
   .brand .logo svg { width: 20px; height: 20px; }
-  .brand .name { font-weight: 700; font-size: 15px; letter-spacing: -.02em; line-height: 1; }
-  .brand .sub { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1; }
+  .brand .name { font-weight: 700; font-size: 15px; letter-spacing: -.02em; line-height: 1; display: block; }
+  .brand .sub { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1; display: block; }
   .brand .sub .by { color: var(--primary); font-weight: 600; }
   .brand:hover .name { color: var(--primary); }
 
@@ -115,7 +115,7 @@
       <span class="logo" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 16.5c3-1 4-7 6.5-7s2 5 4.5 5 3-5 6-5.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><circle cx="20" cy="9" r="2" fill="#FACC15"/></svg>
       </span>
-      <span><span class="name">offline-sketch</span><span class="sub">draw · <span class="by">by NoCodeWork ↗</span></span></span>
+      <span><span class="name">offline-sketch</span><span class="sub">drawing · <span class="by">by NoCodeWork ↗</span></span></span>
     </a>
     <div class="actions panel">
       <button class="btn icon" id="btnUndo" title="Undo (⌘Z)" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
