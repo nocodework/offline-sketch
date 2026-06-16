@@ -131,7 +131,8 @@
 
   <div class="dock panel" aria-label="Tools">
     <button class="tool" id="toolPen" data-tool="pen" title="Pen (P)" aria-label="Pen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg><span class="kbd">P</span></button>
-    <button class="tool" id="toolEraser" data-tool="eraser" title="Eraser (E)" aria-label="Eraser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4L13 4.9a2 2 0 0 1 2.8 0l4.3 4.3a2 2 0 0 1 0 2.8L13 19"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg><span class="kbd">E</span></button>
+    <button class="tool" id="toolEraser" data-tool="eraser" title="Eraser — rub out pixels (E)" aria-label="Eraser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4L13 4.9a2 2 0 0 1 2.8 0l4.3 4.3a2 2 0 0 1 0 2.8L13 19"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg><span class="kbd">E</span></button>
+    <button class="tool" id="toolStrokeEraser" data-tool="strokeEraser" title="Stroke eraser — tap a line to delete it whole (D)" aria-label="Stroke eraser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16c2.5-3.5 5-3.5 7.5 0s5 3.5 7.5 0"/><path d="m16 4 5 5M21 4l-5 5"/></svg><span class="kbd">D</span></button>
     <button class="tool" id="toolSize" title="Brush size (S)" aria-label="Brush size" aria-haspopup="dialog" aria-controls="sizePop" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="17" r="2.5"/><circle cx="17" cy="9" r="5"/></svg><span class="kbd">S</span></button>
     <div class="divider"></div>
     <div class="swatches" id="swatches"></div>
@@ -153,7 +154,8 @@
     <h3 id="helpTitle">Sketching & shortcuts</h3>
     <dl>
       <dt><kbd>P</kbd></dt><dd>Pen (pressure-sensitive with a stylus)</dd>
-      <dt><kbd>E</kbd></dt><dd>Eraser</dd>
+      <dt><kbd>E</kbd></dt><dd>Eraser (rub out pixels)</dd>
+      <dt><kbd>D</kbd></dt><dd>Stroke eraser (tap a line to delete it whole)</dd>
       <dt><kbd>S</kbd></dt><dd>Brush size · <kbd>[</kbd> <kbd>]</kbd> smaller / bigger</dd>
       <dt><kbd>⌘Z</kbd></dt><dd>Undo · <kbd>⌘⇧Z</kbd> redo</dd>
     </dl>
@@ -178,10 +180,10 @@
 
   const COLORS = ['#18181B', '#EF4444', '#F97316', '#EAB308', '#22C55E', '#3B82F6', '#7C3AED', '#EC4899'];
   let state = { strokes: [], tool: 'pen', color: '#18181B', size: 6 };
-  let redoStack = [];
-  let clearedBackup = null;
+  let history = [], hIndex = -1;
   let dpr = Math.max(1, window.devicePixelRatio || 1);
   let drawing = null;     // current stroke being drawn
+  let erasing = false, erasedAny = false;
   let saveTimer = null;
 
   // ---------- rendering ----------
@@ -240,18 +242,22 @@
     return [+(e.clientX - r.left).toFixed(1), +(e.clientY - r.top).toFixed(1), +Math.max(0.05, Math.min(1, p)).toFixed(3)];
   }
   canvas.addEventListener('pointerdown', (e) => {
-    if (activeId !== null || e.button !== 0 && e.pointerType === 'mouse') return;
+    if (activeId !== null || (e.button !== 0 && e.pointerType === 'mouse')) return;
     e.preventDefault();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
     activeId = e.pointerId;
+    if (state.tool === 'strokeEraser') { erasing = true; erasedAny = false; eraseAt(pt(e)); return; }
     drawing = { tool: state.tool, color: state.color, size: state.size, pts: [pt(e)] };
     drawStroke(drawing);
   });
   canvas.addEventListener('pointermove', (e) => {
-    if (e.pointerId !== activeId || !drawing) return;
+    if (e.pointerId !== activeId) return;
     e.preventDefault();
     const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-    for (const ev of (events.length ? events : [e])) {
+    const list = events.length ? events : [e];
+    if (erasing) { for (const ev of list) eraseAt(pt(ev)); return; }
+    if (!drawing) return;
+    for (const ev of list) {
       const p = pt(ev), last = drawing.pts[drawing.pts.length - 1];
       if (last && p[0] === last[0] && p[1] === last[1]) continue;
       drawing.pts.push(p);
@@ -262,8 +268,26 @@
     if (e.pointerId !== activeId) return;
     try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
     activeId = null;
-    if (drawing && drawing.pts.length) { state.strokes.push(drawing); redoStack = []; clearedBackup = null; updateUndo(); scheduleSave(); }
+    if (erasing) { erasing = false; if (erasedAny) pushHistory(); erasedAny = false; drawing = null; return; }
+    if (drawing && drawing.pts.length) { state.strokes.push(drawing); pushHistory(); }
     drawing = null;
+  }
+  // ---------- stroke eraser (delete a whole stroke on touch) ----------
+  function distToSeg(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+    let t = l2 ? ((px - ax) * dx + (py - ay) * dy) / l2 : 0; t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+  }
+  function strokeHit(s, x, y) {
+    const tol = Math.max(9, s.size / 2 + 6), p = s.pts;
+    if (p.length === 1) return Math.hypot(x - p[0][0], y - p[0][1]) <= tol;
+    for (let i = 1; i < p.length; i++) if (distToSeg(x, y, p[i - 1][0], p[i - 1][1], p[i][0], p[i][1]) <= tol) return true;
+    return false;
+  }
+  function eraseAt(pp) {
+    for (let i = state.strokes.length - 1; i >= 0; i--) {
+      if (strokeHit(state.strokes[i], pp[0], pp[1])) { state.strokes.splice(i, 1); erasedAny = true; redrawAll(); return; }
+    }
   }
   canvas.addEventListener('pointerup', endStroke);
   canvas.addEventListener('pointercancel', endStroke);
@@ -272,15 +296,16 @@
   // ---------- tools / ui ----------
   function setTool(t) {
     state.tool = t;
-    document.getElementById('toolPen').classList.toggle('active', t === 'pen');
-    document.getElementById('toolEraser').classList.toggle('active', t === 'eraser');
-    document.getElementById('toolPen').setAttribute('aria-pressed', String(t === 'pen'));
-    document.getElementById('toolEraser').setAttribute('aria-pressed', String(t === 'eraser'));
-    canvas.style.cursor = t === 'eraser' ? 'cell' : 'crosshair';
+    [['toolPen', 'pen'], ['toolEraser', 'eraser'], ['toolStrokeEraser', 'strokeEraser']].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      el.classList.toggle('active', t === name); el.setAttribute('aria-pressed', String(t === name));
+    });
+    canvas.style.cursor = (t === 'eraser' || t === 'strokeEraser') ? 'cell' : 'crosshair';
     updateStatus(); save();
   }
   document.getElementById('toolPen').onclick = () => setTool('pen');
   document.getElementById('toolEraser').onclick = () => setTool('eraser');
+  document.getElementById('toolStrokeEraser').onclick = () => setTool('strokeEraser');
 
   const swatchWrap = document.getElementById('swatches');
   COLORS.forEach(c => {
@@ -309,25 +334,29 @@
     dot.style.width = d + 'px'; dot.style.height = d + 'px';
     dot.style.background = state.tool === 'eraser' ? 'transparent' : state.color;
     dot.style.boxShadow = state.tool === 'eraser' ? 'inset 0 0 0 2px var(--faint)' : 'none';
-    document.getElementById('statusText').textContent = (state.tool === 'eraser' ? 'Eraser' : 'Pen') + ' · ' + state.size + ' px';
+    document.getElementById('statusText').textContent = state.tool === 'strokeEraser' ? 'Stroke eraser · tap a line' : (state.tool === 'eraser' ? 'Eraser' : 'Pen') + ' · ' + state.size + ' px';
   }
 
   // ---------- undo / redo / clear ----------
+  function snapshot() { return JSON.stringify(state.strokes); }
+  function pushHistory() {
+    const snap = snapshot();
+    if (history[hIndex] === snap) { updateUndo(); return; }
+    history = history.slice(0, hIndex + 1); history.push(snap);
+    if (history.length > 50) history.shift();
+    hIndex = history.length - 1; updateUndo(); scheduleSave();
+  }
   function updateUndo() {
-    document.getElementById('btnUndo').disabled = state.strokes.length === 0 && !clearedBackup;
-    document.getElementById('btnRedo').disabled = redoStack.length === 0;
+    document.getElementById('btnUndo').disabled = hIndex <= 0;
+    document.getElementById('btnRedo').disabled = hIndex >= history.length - 1;
   }
-  function undo() {
-    if (clearedBackup && !state.strokes.length) { state.strokes = clearedBackup; clearedBackup = null; redrawAll(); updateUndo(); scheduleSave(); return; }
-    if (!state.strokes.length) return;
-    redoStack.push(state.strokes.pop()); redrawAll(); updateUndo(); scheduleSave();
-  }
-  function redo() { if (!redoStack.length) return; state.strokes.push(redoStack.pop()); redrawAll(); updateUndo(); scheduleSave(); }
+  function undo() { if (hIndex <= 0) return; hIndex--; state.strokes = JSON.parse(history[hIndex]); redrawAll(); updateUndo(); scheduleSave(); }
+  function redo() { if (hIndex >= history.length - 1) return; hIndex++; state.strokes = JSON.parse(history[hIndex]); redrawAll(); updateUndo(); scheduleSave(); }
   document.getElementById('btnUndo').onclick = undo;
   document.getElementById('btnRedo').onclick = redo;
   document.getElementById('btnClear').onclick = () => {
     if (!state.strokes.length) return;
-    if (confirm('Clear the whole canvas?')) { clearedBackup = state.strokes.filter(x => !x._welcome); state.strokes = []; redoStack = []; redrawAll(); updateUndo(); scheduleSave(); flash('Cleared — press Undo (⌘Z) to bring it back'); }
+    if (confirm('Clear the whole canvas?')) { state.strokes = []; redrawAll(); pushHistory(); flash('Cleared — press Undo (⌘Z) to bring it back'); }
   };
 
   // ---------- export / import ----------
@@ -396,7 +425,7 @@
       const next = sanitizeStrokes(d && d.strokes);
       if (!next.length) { flash('No drawing found in that file'); return; }
       if (state.strokes.some(x => !x._welcome) && !confirm('Importing will replace the current drawing. Continue?')) return;
-      state.strokes = next; redoStack = []; clearedBackup = null; redrawAll(); updateUndo(); scheduleSave(); flash('Imported ' + f.name);
+      state.strokes = next; redrawAll(); history = [snapshot()]; hIndex = 0; updateUndo(); scheduleSave(); flash('Imported ' + f.name);
     };
     r.onerror = () => flash('Could not read file');
     r.readAsText(f);
@@ -455,6 +484,7 @@
     if (meta) return;
     if (e.key === 'p' || e.key === 'P') setTool('pen');
     else if (e.key === 'e' || e.key === 'E') setTool('eraser');
+    else if (e.key === 'd' || e.key === 'D') setTool('strokeEraser');
     else if (e.key === 's' || e.key === 'S') sizePop.hidden = !sizePop.hidden;
     else if (e.key === '[') setSize(state.size - 2);
     else if (e.key === ']') setSize(state.size + 2);
@@ -481,8 +511,9 @@
     const c = window.innerWidth / 2, m = window.innerHeight / 2;
     const wave = []; for (let i = 0; i <= 60; i++) { const x = c - 130 + i * 4.3; const y = m + Math.sin(i / 5) * 26; wave.push([+x.toFixed(1), +y.toFixed(1), +(0.35 + 0.3 * (1 + Math.sin(i / 7))).toFixed(3)]); }
     state.strokes.push({ tool: 'pen', color: '#7C3AED', size: 8, pts: wave, _welcome: true });
-    redrawAll(); updateUndo();
+    redrawAll();
   }
+  history = [snapshot()]; hIndex = 0; updateUndo();
 })();
 </script>
 </body>
