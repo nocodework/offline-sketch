@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>offline-sketch — a private, offline sketchpad in a single HTML file</title>
+<meta name="description" content="A private, offline sketchpad in one HTML file. Draw with a pressure-sensitive pen (Apple Pencil, Wacom, iPad). No account, no server, no tracking — your drawings never leave your browser. Free & open source.">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#7C3AED">
+<meta property="og:type" content="website">
+<meta property="og:title" content="offline-sketch — a private, offline sketchpad">
+<meta property="og:description" content="One HTML file. Draw with a pressure-sensitive stylus, fully offline. No account, no server, no tracking. Free & open source.">
+<meta property="og:image" content="screenshot.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJvZmZsaW5lLXNrZXRjaCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCIgeTE9IjAiIHgyPSIwIiB5Mj0iNjQiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjOEI1Q0Y2Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzZEMjhEOSIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTUiIGZpbGw9InVybCgjYmcpIi8+CiAgPHBhdGggZD0iTTEwIDQyIEMgMTggMjAsIDI2IDIwLCAzMCAzMyBTIDQyIDQ2LCA1MCAyNCIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjYiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogIDxjaXJjbGUgY3g9IjUwIiBjeT0iMjQiIHI9IjUuNSIgZmlsbD0iI0ZBQ0MxNSIvPgo8L3N2Zz4K">
+<!-- Zero external requests by design: no web fonts, no CDN, no analytics. System fonts only. -->
+<style>
+  :root {
+    --bg: #FAFAFA; --paper: #FFFFFF; --panel: #FFFFFF;
+    --text: #18181B; --muted: #71717A; --faint: #A1A1AA;
+    --border: #E4E4E7; --primary: #7C3AED; --primary-hover: #6D28D9; --primary-soft: #F5F3FF;
+    --ring: #7C3AED;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+    --shadow-md: 0 6px 18px rgba(0,0,0,.10), 0 2px 6px rgba(0,0,0,.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px; -webkit-font-smoothing: antialiased;
+    user-select: none; -webkit-user-select: none; touch-action: none;
+  }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 6px; }
+  button { font-family: inherit; cursor: pointer; }
+
+  #pad { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: var(--paper); touch-action: none; cursor: crosshair; z-index: 0; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-md); }
+
+  /* top bar */
+  .topbar { position: fixed; top: 12px; left: 12px; right: 12px; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 12px; pointer-events: none; }
+  .topbar > * { pointer-events: auto; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 10px; text-decoration: none; color: inherit; }
+  .brand .logo { width: 32px; height: 32px; flex: none; border-radius: 8px; background: linear-gradient(180deg,#8B5CF6,#6D28D9); display: grid; place-items: center; box-shadow: var(--shadow-sm); }
+  .brand .logo svg { width: 20px; height: 20px; }
+  .brand .name { font-weight: 700; font-size: 15px; letter-spacing: -.02em; line-height: 1; }
+  .brand .sub { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1; }
+  .brand .sub .by { color: var(--primary); font-weight: 600; }
+  .brand:hover .name { color: var(--primary); }
+
+  .actions { display: flex; align-items: center; gap: 6px; padding: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .actions .sep { width: 1px; height: 22px; background: var(--border); margin: 0 2px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .btn:hover { background: var(--bg); border-color: #D4D4D8; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.icon { width: 34px; padding: 0; justify-content: center; }
+  .btn svg { width: 16px; height: 16px; }
+  .btn.danger:hover { background: #FEF2F2; border-color: #FECACA; color: #DC2626; }
+
+  /* left tool dock */
+  .dock { position: fixed; left: 12px; top: 50%; transform: translateY(-50%); z-index: 10; display: flex; flex-direction: column; gap: 6px; padding: 8px; align-items: center; }
+  .tool { width: 42px; height: 42px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 10px; color: #3F3F46; position: relative; }
+  .tool svg { width: 21px; height: 21px; }
+  .tool:hover { background: var(--bg); }
+  .tool.active { background: var(--primary-soft); color: var(--primary); }
+  .tool .kbd { position: absolute; bottom: 2px; right: 4px; font-size: 9px; font-weight: 600; color: var(--faint); }
+  .tool.active .kbd { color: var(--primary); }
+  .dock .divider { width: 26px; height: 1px; background: var(--border); margin: 2px 0; }
+
+  .swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .swatch { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border); cursor: pointer; padding: 0; }
+  .swatch:hover { transform: scale(1.12); }
+  .swatch.sel { box-shadow: 0 0 0 2px var(--primary); }
+
+  .size-pop { position: fixed; left: 64px; top: 50%; transform: translateY(-50%); z-index: 11; padding: 14px 16px; width: 190px; }
+  .size-pop label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 8px; }
+  .size-pop input[type=range] { width: 100%; accent-color: var(--primary); }
+  .size-preview { height: 44px; display: grid; place-items: center; margin-top: 6px; }
+  .size-dot { background: var(--text); border-radius: 50%; }
+
+  /* bottom-right brush/size indicator */
+  .statusbar { position: fixed; right: 12px; bottom: 12px; z-index: 10; display: flex; align-items: center; gap: 8px; padding: 7px 12px; font-size: 12px; color: var(--muted); }
+  .statusbar .dot { border-radius: 50%; background: var(--text); flex: none; }
+
+  /* help */
+  .help-fab { position: fixed; left: 12px; bottom: 12px; z-index: 11; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow-sm); color: var(--muted); font-weight: 700; }
+  .help-fab:hover { color: var(--primary); border-color: var(--primary); }
+  .help-panel { position: fixed; left: 12px; bottom: 54px; z-index: 12; width: 290px; padding: 16px 18px; }
+  .help-panel h3 { margin: 0 0 10px; font-size: 14px; }
+  .help-panel dl { display: grid; grid-template-columns: auto 1fr; gap: 7px 12px; margin: 0; font-size: 13px; }
+  .help-panel dt { display: flex; gap: 4px; }
+  .help-panel dd { margin: 0; color: var(--muted); }
+  .help-panel kbd { font-family: ui-monospace, Menlo, monospace; font-size: 11px; background: var(--bg); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; }
+  .help-panel .foot { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+  .help-panel a { color: var(--primary); text-decoration: none; font-weight: 500; }
+  .help-panel a:hover { text-decoration: underline; }
+
+  #flash { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 9px; font-size: 13px; z-index: 50; box-shadow: var(--shadow-md); opacity: 0; transition: opacity .15s; pointer-events: none; }
+
+  @media (max-width: 720px) { .brand .sub { display: none; } .actions .label { display: none; } }
+</style>
+</head>
+<body>
+  <canvas id="pad" aria-label="Sketch canvas. Draw with a mouse, finger or stylus."></canvas>
+
+  <div class="topbar">
+    <a class="brand panel" href="https://nocodework.io" target="_blank" rel="noopener" title="Built by NoCodeWork, automation and AI apps">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 16.5c3-1 4-7 6.5-7s2 5 4.5 5 3-5 6-5.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><circle cx="20" cy="9" r="2" fill="#FACC15"/></svg>
+      </span>
+      <span><span class="name">offline-sketch</span><span class="sub">draw · <span class="by">by NoCodeWork ↗</span></span></span>
+    </a>
+    <div class="actions panel">
+      <button class="btn icon" id="btnUndo" title="Undo (⌘Z)" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+      <button class="btn icon" id="btnRedo" title="Redo (⌘⇧Z)" aria-label="Redo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+      <span class="sep"></span>
+      <button class="btn" id="btnPng" title="Download PNG"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg><span class="label">PNG</span></button>
+      <button class="btn" id="btnExport" title="Export .json"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span class="label">Export</span></button>
+      <button class="btn" id="btnImport" title="Import .json"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/></svg><span class="label">Import</span></button>
+      <span class="sep"></span>
+      <button class="btn danger icon" id="btnClear" title="Clear canvas" aria-label="Clear canvas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+    </div>
+  </div>
+
+  <div class="dock panel" role="toolbar" aria-label="Tools">
+    <button class="tool" id="toolPen" data-tool="pen" title="Pen (P)" aria-label="Pen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg><span class="kbd">P</span></button>
+    <button class="tool" id="toolEraser" data-tool="eraser" title="Eraser (E)" aria-label="Eraser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4L13 4.9a2 2 0 0 1 2.8 0l4.3 4.3a2 2 0 0 1 0 2.8L13 19"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg><span class="kbd">E</span></button>
+    <button class="tool" id="toolSize" title="Brush size (S)" aria-label="Brush size"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="17" r="2.5"/><circle cx="17" cy="9" r="5"/></svg><span class="kbd">S</span></button>
+    <div class="divider"></div>
+    <div class="swatches" id="swatches"></div>
+  </div>
+
+  <div class="size-pop panel" id="sizePop" hidden>
+    <label for="sizeRange">Brush size — <span id="sizeVal">6</span> px</label>
+    <input type="range" id="sizeRange" min="1" max="48" value="6">
+    <div class="size-preview"><span class="size-dot" id="sizeDot"></span></div>
+  </div>
+
+  <div class="statusbar panel">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">Pen · 6 px</span>
+  </div>
+
+  <button class="help-fab" id="helpFab" title="Help & shortcuts" aria-label="Help" aria-haspopup="dialog" aria-controls="helpPanel" aria-expanded="false">?</button>
+  <div class="help-panel panel" id="helpPanel" role="dialog" aria-modal="false" aria-labelledby="helpTitle" tabindex="-1" hidden>
+    <h3 id="helpTitle">Sketching & shortcuts</h3>
+    <dl>
+      <dt><kbd>P</kbd></dt><dd>Pen (pressure-sensitive with a stylus)</dd>
+      <dt><kbd>E</kbd></dt><dd>Eraser</dd>
+      <dt><kbd>S</kbd></dt><dd>Brush size · <kbd>[</kbd> <kbd>]</kbd> smaller / bigger</dd>
+      <dt><kbd>⌘Z</kbd></dt><dd>Undo · <kbd>⌘⇧Z</kbd> redo</dd>
+    </dl>
+    <div class="foot">Your drawing is saved in this browser. Tip: use Export now and then to keep a copy you own.<br><br>Built by <a href="https://nocodework.io" target="_blank" rel="noopener">NoCodeWork</a>, automation and AI apps.<br>Sibling tools: <a href="https://nocodework.github.io/offline-whiteboard/" target="_blank" rel="noopener">offline-whiteboard</a>, <a href="https://nocodework.github.io/offline-notes/" target="_blank" rel="noopener">offline-notes</a>.</div>
+  </div>
+
+  <div id="flash"></div>
+  <input type="file" id="importFile" accept="application/json,.json" hidden>
+
+<script>
+"use strict";
+(function () {
+  // =====================================================================
+  //  offline-sketch — a private, offline sketchpad (single HTML file).
+  //  Pressure-sensitive strokes via Pointer Events (e.pressure + coalesced
+  //  events for stylus fidelity). Strokes are kept as point lists so we can
+  //  undo, redo, resize, export and persist them. Everything is local.
+  // =====================================================================
+  const canvas = document.getElementById('pad');
+  const ctx = canvas.getContext('2d');
+  const STORE = 'offline-sketch-v1';
+
+  const COLORS = ['#18181B', '#EF4444', '#F97316', '#EAB308', '#22C55E', '#3B82F6', '#7C3AED', '#EC4899'];
+  let state = { strokes: [], tool: 'pen', color: '#18181B', size: 6 };
+  let redoStack = [];
+  let dpr = Math.max(1, window.devicePixelRatio || 1);
+  let drawing = null;     // current stroke being drawn
+  let saveTimer = null;
+
+  // ---------- rendering ----------
+  function resize() {
+    dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    redrawAll();
+  }
+  function clearCanvas() { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, window.innerWidth, window.innerHeight); }
+  function radiusFor(size, pressure) { return (size / 2) * (0.4 + 0.6 * pressure); }
+
+  // Stamp a smooth segment between two pressured points (variable width).
+  function stampSegment(a, b, color, size, erase) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
+    ctx.fillStyle = erase ? '#000' : color;
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    const dist = Math.hypot(dx, dy);
+    const r0 = radiusFor(size, a[2]), r1 = radiusFor(size, b[2]);
+    const spacing = Math.max(0.6, Math.min(r0, r1) * 0.35);
+    const steps = Math.max(1, Math.ceil(dist / spacing));
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = a[0] + dx * t, y = a[1] + dy * t, r = r0 + (r1 - r0) * t;
+      ctx.beginPath(); ctx.arc(x, y, Math.max(0.3, r), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  function drawStroke(s) {
+    const pts = s.pts;
+    if (pts.length === 1) { stampSegment(pts[0], pts[0], s.color, s.size, s.tool === 'eraser'); return; }
+    for (let i = 1; i < pts.length; i++) stampSegment(pts[i - 1], pts[i], s.color, s.size, s.tool === 'eraser');
+  }
+  function redrawAll() { clearCanvas(); for (const s of state.strokes) drawStroke(s); }
+
+  // ---------- pointer input ----------
+  let activeId = null;
+  function pt(e) {
+    const r = canvas.getBoundingClientRect();
+    let p = e.pressure;
+    if (!p || e.pointerType === 'mouse' || e.pointerType === 'touch') p = (e.buttons || e.pressure) ? 0.5 : 0.5;
+    if (e.pointerType === 'pen') p = e.pressure > 0 ? e.pressure : 0.5;
+    return [+(e.clientX - r.left).toFixed(1), +(e.clientY - r.top).toFixed(1), +Math.max(0.05, Math.min(1, p)).toFixed(3)];
+  }
+  canvas.addEventListener('pointerdown', (e) => {
+    if (activeId !== null || e.button !== 0 && e.pointerType === 'mouse') return;
+    e.preventDefault();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    activeId = e.pointerId;
+    drawing = { tool: state.tool, color: state.color, size: state.size, pts: [pt(e)] };
+    drawStroke(drawing);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== activeId || !drawing) return;
+    e.preventDefault();
+    const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    for (const ev of (events.length ? events : [e])) {
+      const p = pt(ev), last = drawing.pts[drawing.pts.length - 1];
+      if (last && p[0] === last[0] && p[1] === last[1]) continue;
+      drawing.pts.push(p);
+      stampSegment(last, p, drawing.color, drawing.size, drawing.tool === 'eraser');
+    }
+  });
+  function endStroke(e) {
+    if (e.pointerId !== activeId) return;
+    try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+    activeId = null;
+    if (drawing && drawing.pts.length) { state.strokes.push(drawing); redoStack = []; updateUndo(); scheduleSave(); }
+    drawing = null;
+  }
+  canvas.addEventListener('pointerup', endStroke);
+  canvas.addEventListener('pointercancel', endStroke);
+
+  // ---------- tools / ui ----------
+  function setTool(t) {
+    state.tool = t;
+    document.getElementById('toolPen').classList.toggle('active', t === 'pen');
+    document.getElementById('toolEraser').classList.toggle('active', t === 'eraser');
+    document.getElementById('toolPen').setAttribute('aria-pressed', String(t === 'pen'));
+    document.getElementById('toolEraser').setAttribute('aria-pressed', String(t === 'eraser'));
+    canvas.style.cursor = t === 'eraser' ? 'cell' : 'crosshair';
+    updateStatus(); save();
+  }
+  document.getElementById('toolPen').onclick = () => setTool('pen');
+  document.getElementById('toolEraser').onclick = () => setTool('eraser');
+
+  const swatchWrap = document.getElementById('swatches');
+  COLORS.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'swatch'; b.style.background = c; b.dataset.c = c;
+    b.title = c; b.setAttribute('aria-label', 'Color ' + c);
+    b.onclick = () => { state.color = c; if (state.tool === 'eraser') setTool('pen'); markSwatch(); updateStatus(); save(); };
+    swatchWrap.appendChild(b);
+  });
+  function markSwatch() { document.querySelectorAll('.swatch').forEach(s => s.classList.toggle('sel', s.dataset.c === state.color)); }
+
+  const sizePop = document.getElementById('sizePop'), sizeRange = document.getElementById('sizeRange'), sizeVal = document.getElementById('sizeVal'), sizeDot = document.getElementById('sizeDot');
+  document.getElementById('toolSize').onclick = (e) => { e.stopPropagation(); sizePop.hidden = !sizePop.hidden; };
+  document.addEventListener('pointerdown', (e) => { if (!sizePop.hidden && !sizePop.contains(e.target) && e.target.id !== 'toolSize' && !e.target.closest('#toolSize')) sizePop.hidden = true; });
+  function setSize(n) {
+    state.size = Math.max(1, Math.min(48, Math.round(n)));
+    sizeRange.value = state.size; sizeVal.textContent = state.size;
+    const d = Math.max(4, Math.min(40, state.size)); sizeDot.style.width = d + 'px'; sizeDot.style.height = d + 'px';
+    updateStatus(); save();
+  }
+  sizeRange.oninput = () => setSize(+sizeRange.value);
+
+  function updateStatus() {
+    const d = Math.max(5, Math.min(22, state.size));
+    const dot = document.getElementById('statusDot');
+    dot.style.width = d + 'px'; dot.style.height = d + 'px';
+    dot.style.background = state.tool === 'eraser' ? 'transparent' : state.color;
+    dot.style.boxShadow = state.tool === 'eraser' ? 'inset 0 0 0 2px var(--faint)' : 'none';
+    document.getElementById('statusText').textContent = (state.tool === 'eraser' ? 'Eraser' : 'Pen') + ' · ' + state.size + ' px';
+  }
+
+  // ---------- undo / redo / clear ----------
+  function updateUndo() {
+    document.getElementById('btnUndo').disabled = state.strokes.length === 0;
+    document.getElementById('btnRedo').disabled = redoStack.length === 0;
+  }
+  function undo() { if (!state.strokes.length) return; redoStack.push(state.strokes.pop()); redrawAll(); updateUndo(); scheduleSave(); }
+  function redo() { if (!redoStack.length) return; state.strokes.push(redoStack.pop()); redrawAll(); updateUndo(); scheduleSave(); }
+  document.getElementById('btnUndo').onclick = undo;
+  document.getElementById('btnRedo').onclick = redo;
+  document.getElementById('btnClear').onclick = () => {
+    if (!state.strokes.length) return;
+    if (confirm('Clear the whole canvas? This can\'t be undone with a button.')) { state.strokes = []; redoStack = []; redrawAll(); updateUndo(); scheduleSave(); }
+  };
+
+  // ---------- export / import ----------
+  function bbox() {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const s of state.strokes) for (const p of s.pts) {
+      const r = s.size / 2 + 2;
+      minX = Math.min(minX, p[0] - r); minY = Math.min(minY, p[1] - r);
+      maxX = Math.max(maxX, p[0] + r); maxY = Math.max(maxY, p[1] + r);
+    }
+    if (!Number.isFinite(minX)) return null;
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  }
+  function download(blob, name) {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function exportPNG() {
+    const bb = bbox();
+    if (!bb) { flash('Nothing to export yet'); return; }
+    const pad = 24, scale = 2;
+    const w = Math.ceil((bb.w + pad * 2) * scale), h = Math.ceil((bb.h + pad * 2) * scale);
+    const off = document.createElement('canvas'); off.width = w; off.height = h;
+    const oc = off.getContext('2d');
+    oc.fillStyle = '#FFFFFF'; oc.fillRect(0, 0, w, h);
+    oc.setTransform(scale, 0, 0, scale, (-bb.x + pad) * scale, (-bb.y + pad) * scale);
+    const realCtx = ctx, realDpr = dpr;
+    // re-stamp strokes onto the offscreen context
+    for (const s of state.strokes) stampOn(oc, s);
+    off.toBlob((blob) => { if (!blob) { flash('Could not generate PNG'); return; } download(blob, 'sketch.png'); }, 'image/png');
+  }
+  function stampOn(c, s) {
+    const pts = s.pts, erase = s.tool === 'eraser';
+    const seg = (a, b) => {
+      c.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
+      c.fillStyle = erase ? '#000' : s.color;
+      const dx = b[0] - a[0], dy = b[1] - a[1], dist = Math.hypot(dx, dy);
+      const r0 = radiusFor(s.size, a[2]), r1 = radiusFor(s.size, b[2]);
+      const spacing = Math.max(0.6, Math.min(r0, r1) * 0.35), steps = Math.max(1, Math.ceil(dist / spacing));
+      for (let i = 0; i <= steps; i++) { const t = i / steps; c.beginPath(); c.arc(a[0] + dx * t, a[1] + dy * t, Math.max(0.3, r0 + (r1 - r0) * t), 0, Math.PI * 2); c.fill(); }
+      c.globalCompositeOperation = 'source-over';
+    };
+    if (pts.length === 1) seg(pts[0], pts[0]); else for (let i = 1; i < pts.length; i++) seg(pts[i - 1], pts[i]);
+  }
+  function exportJSON() {
+    const data = JSON.stringify({ app: 'offline-sketch', version: 1, strokes: state.strokes });
+    download(new Blob([data], { type: 'application/json' }), 'sketch.json');
+  }
+  document.getElementById('btnPng').onclick = exportPNG;
+  document.getElementById('btnExport').onclick = exportJSON;
+  document.getElementById('btnImport').onclick = () => document.getElementById('importFile').click();
+  document.getElementById('importFile').onchange = (e) => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    if (f.size > 8 * 1024 * 1024) { flash('File too large'); return; }
+    const r = new FileReader();
+    r.onload = () => { try { const d = JSON.parse(r.result); state.strokes = sanitizeStrokes(d.strokes); redoStack = []; redrawAll(); updateUndo(); scheduleSave(); flash('Imported ' + f.name); } catch (err) { flash('Could not load file: ' + err.message); } };
+    r.onerror = () => flash('Could not read file');
+    r.readAsText(f);
+  };
+
+  // ---------- persistence ----------
+  function sanitizeStrokes(arr) {
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(s => s && (s.tool === 'pen' || s.tool === 'eraser') && Array.isArray(s.pts)).map(s => ({
+      tool: s.tool,
+      color: typeof s.color === 'string' ? s.color : '#18181B',
+      size: Number.isFinite(+s.size) ? Math.max(1, Math.min(48, +s.size)) : 6,
+      pts: s.pts.filter(p => Array.isArray(p) && p.length >= 2 && Number.isFinite(+p[0]) && Number.isFinite(+p[1]))
+                .map(p => [+p[0], +p[1], Number.isFinite(+p[2]) ? Math.max(0.05, Math.min(1, +p[2])) : 0.5]),
+    })).filter(s => s.pts.length);
+  }
+  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); }
+  function save() {
+    try { localStorage.setItem(STORE, JSON.stringify({ strokes: state.strokes, tool: state.tool, color: state.color, size: state.size })); }
+    catch (e) { flash('Could not save (storage full?)'); }
+  }
+  function load() {
+    try {
+      const d = JSON.parse(localStorage.getItem(STORE) || 'null');
+      if (!d) return;
+      state.strokes = sanitizeStrokes(d.strokes);
+      if (d.tool === 'pen' || d.tool === 'eraser') state.tool = d.tool;
+      if (typeof d.color === 'string') state.color = d.color;
+      if (Number.isFinite(+d.size)) state.size = Math.max(1, Math.min(48, +d.size));
+    } catch (e) {}
+  }
+
+  let flashTimer = null;
+  function flash(msg) { const el = document.getElementById('flash'); el.textContent = msg; el.style.opacity = '1'; clearTimeout(flashTimer); flashTimer = setTimeout(() => el.style.opacity = '0', 1600); }
+
+  // ---------- keyboard ----------
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !helpPanel.hidden) { helpPanel.hidden = true; helpFab.setAttribute('aria-expanded', 'false'); return; }
+    const meta = e.metaKey || e.ctrlKey;
+    if (meta && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+    if (meta && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+    if (meta) return;
+    if (e.key === 'p' || e.key === 'P') setTool('pen');
+    else if (e.key === 'e' || e.key === 'E') setTool('eraser');
+    else if (e.key === 's' || e.key === 'S') sizePop.hidden = !sizePop.hidden;
+    else if (e.key === '[') setSize(state.size - 2);
+    else if (e.key === ']') setSize(state.size + 2);
+  });
+
+  const helpFab = document.getElementById('helpFab'), helpPanel = document.getElementById('helpPanel');
+  helpFab.onclick = () => { helpPanel.hidden = !helpPanel.hidden; helpFab.setAttribute('aria-expanded', String(!helpPanel.hidden)); if (!helpPanel.hidden) helpPanel.focus(); };
+  document.addEventListener('pointerdown', (e) => { if (!helpPanel.hidden && !helpPanel.contains(e.target) && e.target !== helpFab) { helpPanel.hidden = true; helpFab.setAttribute('aria-expanded', 'false'); } });
+
+  window.addEventListener('resize', resize);
+  window.addEventListener('beforeunload', save);
+
+  // ---------- init ----------
+  load();
+  setTool(state.tool);
+  markSwatch();
+  setSize(state.size);
+  updateUndo();
+  resize();
+
+  if (!state.strokes.length) {
+    // tiny welcome scribble so the canvas isn't blank on first open
+    const c = window.innerWidth / 2, m = window.innerHeight / 2;
+    const wave = []; for (let i = 0; i <= 60; i++) { const x = c - 130 + i * 4.3; const y = m + Math.sin(i / 5) * 26; wave.push([+x.toFixed(1), +y.toFixed(1), +(0.35 + 0.3 * (1 + Math.sin(i / 7))).toFixed(3)]); }
+    state.strokes.push({ tool: 'pen', color: '#7C3AED', size: 8, pts: wave });
+    redrawAll(); updateUndo();
+  }
+})();
+</script>
+</body>
+</html>
